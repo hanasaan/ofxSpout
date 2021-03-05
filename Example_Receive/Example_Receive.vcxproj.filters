@@ -22,6 +22,9 @@
 		<ClCompile Include="..\..\..\addons\ofxSpout\src\ofxSpout\Utils.cpp">
 			<Filter>addons\ofxSpout\src\ofxSpout</Filter>
 		</ClCompile>
+		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\Spout.cpp">
+			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
+		</ClCompile>
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutCopy.cpp">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClCompile>
@@ -31,19 +34,13 @@
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutFrameCount.cpp">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClCompile>
-		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLDXinterop.cpp">
+		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGL.cpp">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClCompile>
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLextensions.cpp">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClCompile>
-		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutMemoryShare.cpp">
-			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
-		</ClCompile>
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutReceiver.cpp">
-			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
-		</ClCompile>
-		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSDK.cpp">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClCompile>
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSender.cpp">
@@ -119,19 +116,13 @@
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutFrameCount.h">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClInclude>
-		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLDXinterop.h">
+		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGL.h">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClInclude>
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLextensions.h">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClInclude>
-		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutMemoryShare.h">
-			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
-		</ClInclude>
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutReceiver.h">
-			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
-		</ClInclude>
-		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSDK.h">
 			<Filter>addons\ofxSpout\libs\SpoutSDK\src</Filter>
 		</ClInclude>
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSender.h">

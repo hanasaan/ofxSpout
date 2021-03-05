@@ -68,7 +68,7 @@ namespace ofxSpout {
 			//pull data into the texture (keep any existing fbo attachments)
 			GLint drawFboId = 0;
 			glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFboId);
-			if (!this->spoutReceiver->ReceiveTextureData(texture.getTextureData().textureID, texture.getTextureData().textureTarget, drawFboId)) {
+			if (!this->spoutReceiver->ReceiveTexture(texture.getTextureData().textureID, texture.getTextureData().textureTarget, false, drawFboId)) {
 				throw("Can't receive texture");
 			}
 

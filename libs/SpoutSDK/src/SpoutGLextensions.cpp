@@ -5,7 +5,7 @@
 //
 //			Used for load of openGL extensions with option
 //			to use Glew or disable dynamic load of specific extensions
-//			See spoutGLext.h
+//			See spoutGLextions.h
 //
 //			01.09.15	- added MessageBox error warning in LoadGLextensions
 //			11.11.15	- removed (unsigned) cast from GetProcAddress in FBO extensions
@@ -18,9 +18,14 @@
 //			27.10.18	- Test for opengl context in loadglextensions
 //			21.11.18	- Add copy extensions for future use
 //			23.11.18	- Fix test for wglDXCloseDeviceNV in loadInteropExtensions
+//			14.09.20	- Add legacyOpenGL define test in "isExtensionSupported" to avoid glGetString
+//						  Thanks to Alexandre Buge (https://github.com/Qlex42) for the notice and fix
+//			23.09.20	- Correct isExtensionSupported
+//						  Include SpoutCommon.h for legacyOpenGL
+//			11.12.20	- Add glGetBufferParameterivEXT
 //
 
-	Copyright (c) 2014-2019, Lynn Jarvis. All rights reserved.
+	Copyright (c) 2014-2021, Lynn Jarvis. All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without modification, 
 	are permitted provided that the following conditions are met:
@@ -43,7 +48,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "spoutGLextensions.h"
+#include "SpoutGLextensions.h"
 
 #ifndef USE_GLEW
 
@@ -94,11 +99,12 @@ glBindBufferPROC						glBindBufferEXT					= NULL;
 glBufferDataPROC						glBufferDataEXT					= NULL;
 glMapBufferPROC							glMapBufferEXT					= NULL;
 glUnmapBufferPROC						glUnmapBufferEXT				= NULL;
+glGetBufferParameterivPROC				glGetBufferParameterivEXT		= NULL;
 #endif
 
 //-------------------
 // Copy extensions
-// TODO : future use
+// (for future use)
 //-------------------
 #ifdef USE_COPY_EXTENSIONS
 PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData = NULL;
@@ -282,10 +288,12 @@ bool loadPBOextensions()
 	glBufferDataEXT	   = (glBufferDataPROC)wglGetProcAddress("glBufferData");
 	glMapBufferEXT     = (glMapBufferPROC)wglGetProcAddress("glMapBuffer");
 	glUnmapBufferEXT   = (glUnmapBufferPROC)wglGetProcAddress("glUnmapBuffer");
+	glGetBufferParameterivEXT = (glGetBufferParameterivPROC)wglGetProcAddress("glGetBufferParameteriv");
 
 	if(glGenBuffersEXT != NULL && glDeleteBuffersEXT != NULL
 	&& glBindBufferEXT != NULL && glBufferDataEXT    != NULL
-	&& glMapBufferEXT  != NULL && glUnmapBufferEXT   != NULL) {
+	&& glMapBufferEXT  != NULL && glUnmapBufferEXT   != NULL
+	&& glGetBufferParameterivEXT != NULL) {
 		return true;
 	}
 	else {
@@ -422,49 +430,7 @@ unsigned int loadGLextensions() {
 	InitializeGlew(); // probably needs failure check
 #endif
 
-	/*
-	// LJ DEBUG
-	// Used for testing OpenGL version
-	printf("LoadGLextensions()\n");
-
-	printf("GL_version  = %s\n", (char *)glGetString(GL_VERSION));
-	printf("GL_vendor   = %s\n", (char *)glGetString(GL_VENDOR));
-	printf("GL_renderer = %s\n", (char *)glGetString(GL_RENDERER));
-	// printf("gl_extensions = %s\n", reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS)));
-	int major, minor = -1;
-	glGetIntegerv(GL_MAJOR_VERSION, &major);
-	glGetIntegerv(GL_MINOR_VERSION, &minor);
-	printf("  Major : %d\n", major);
-	printf("  Minor : %d\n", minor);
-	int profile_mask = -1;
-	glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile_mask);
-	printf("Profile mask : %d\n", profile_mask);
-	// This can contain the bits GL_CONTEXT_CORE_PROFILE_BIT
-	// or GL_CONTEXT_COMPATIBILITY_PROFILE_BIT, but not both at the same time.
-	if (profile_mask & GL_CONTEXT_CORE_PROFILE_BIT)
-		printf("    GL_CONTEXT_CORE_PROFILE_BIT\n");
-	if (profile_mask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)
-		printf("    GL_CONTEXT_COMPATIBILITY_PROFILE_BIT\n");
-	int context_flags = -1;
-	glGetIntegerv(GL_CONTEXT_FLAGS, &context_flags);
-	printf("Context flags : %d\n", context_flags);
-	if (context_flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)
-		printf("    GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT\n");
-	if (context_flags & GL_CONTEXT_FLAG_DEBUG_BIT)
-		printf("    GL_CONTEXT_FLAG_DEBUG_BIT\n");
-	if (context_flags & GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT)
-		printf("    GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT\n");
-	if (context_flags & GL_CONTEXT_FLAG_NO_ERROR_BIT)
-		printf("    GL_CONTEXT_FLAG_NO_ERROR_BIT\n");
-	// printf("gl_shading_language = %s\n", reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
-
-	if (GL_VERSION >= 3.0)
-		printf("OpenGL 3-4\n");
-	else
-		printf("OpenGL 2\n");
-	*/
-
-	// Check for FBO extensions first - no use continuing without them
+	// Check for FBO extensions - no use continuing without them
 	if (loadFBOextensions()) {
 		caps |= GLEXT_SUPPORT_FBO;
 	}
@@ -503,7 +469,7 @@ unsigned int loadGLextensions() {
 	}
 
 	if (loadContextExtension()) {
-		caps |= SUPPORT_CONTEXT_EXTENSION;
+		caps |= GLEXT_SUPPORT_CONTEXT;
 	}
 	else {
 		spoututils::SpoutLogWarning("loadGLextensions : loadContextExtension fail");
@@ -517,7 +483,7 @@ unsigned int loadGLextensions() {
 		spoututils::SpoutLogWarning("loadGLextensions : loadInteropExtensions fail");
 	}
 
-	spoututils::SpoutLogNotice("loadGLextensions : extensions loaded successfully");
+	// spoututils::SpoutLogNotice("loadGLextensions : extensions loaded successfully");
 
 	// Find out whether bgra extensions are supported at compile and runtime
 #ifdef GL_EXT_bgra
@@ -541,9 +507,6 @@ unsigned int loadGLextensions() {
 //
 bool isExtensionSupported(const char *extension)
 {
-	int n = 0;
-	int i = 0;
-
 	if (!extension || *extension == '\0')
 		return false;
 
@@ -551,58 +514,56 @@ bool isExtensionSupported(const char *extension)
 	if(strchr(extension, ' '))
 		return false;
 
+// glGetString can cause problems for core OpenGL context
+#ifdef legacyOpenGL
 	const char * extensionsstr = (const char *)glGetString(GL_EXTENSIONS);
 	if (extensionsstr) {
 		std::string extensions = extensionsstr;
 		std::size_t found = extensions.find(extension);
 		if (found != std::string::npos) {
-			SpoutLogNotice("isExtensionSupported : extension [%s] found", extension, found);
 			return true;
 		}
-		SpoutLogNotice("isExtensionSupported : extension [%s] not found", extension);
+		SpoutLogWarning("isExtensionSupported : extension [%s] not found", extension);
 		return false;
 	}
-	else {
-
-		SpoutLogNotice("isExtensionSupported : glGetString(GL_EXTENSIONS) not supported - using glGetStringi");
-
-		//
-		// glGetstring not supported
-		// for a core GL context
-		//
-		// Code adapted from : https://bitbucket.org/Coin3D/coin/issues/54/support-for-opengl-3x-specifically
-		// Also : http://www.opengl.org/resources/features/OGLextensions/
-		//
-
-		typedef GLubyte* (APIENTRY * COIN_PFNGLGETSTRINGIPROC)(GLenum enm, GLuint idx);
-		COIN_PFNGLGETSTRINGIPROC glGetStringi = 0;
-		glGetStringi = (COIN_PFNGLGETSTRINGIPROC)wglGetProcAddress("glGetStringi");
-		if(glGetStringi != NULL) {
-			glGetIntegerv(GL_NUM_EXTENSIONS, &n);
-			if(n > 0) {
-				const char * exc = nullptr;
-				for (i = 0; i < n; i++) {
-					exc = (const char *)glGetStringi(GL_EXTENSIONS, i);
-					if(exc) {
-						if(strcmp(exc, extension) == 0)
-							break;
-					}
+#else
+	//
+	// glGetstring not supported
+	// for a core GL context
+	//
+	// Code adapted from : https://bitbucket.org/Coin3D/coin/issues/54/support-for-opengl-3x-specifically
+	// Also : http://www.opengl.org/resources/features/OGLextensions/
+	//
+	int n = 0;
+	int i = 0;
+	typedef GLubyte* (APIENTRY * COIN_PFNGLGETSTRINGIPROC)(GLenum enm, GLuint idx);
+	COIN_PFNGLGETSTRINGIPROC glGetStringi = 0;
+	glGetStringi = (COIN_PFNGLGETSTRINGIPROC)wglGetProcAddress("glGetStringi");
+	if(glGetStringi != NULL) {
+		glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+		if(n > 0) {
+			const char * exc = nullptr;
+			for (i = 0; i < n; i++) {
+				exc = (const char *)glGetStringi(GL_EXTENSIONS, (GLuint)i);
+				if(exc) {
+					if(strcmp(exc, extension) == 0)
+						break;
 				}
-				if(exc && i < n) {
-					SpoutLogNotice("isExtensionSupported : extension [%s] found", extension);
-					return true;
-				}
-				SpoutLogNotice("isExtensionSupported : extension [%s] not found", extension);
-				return false;
 			}
-			else {
-				SpoutLogWarning("isExtensionSupported : glGetIntegerv(GL_NUM_EXTENSIONS) did not return a value");
+			if(exc && i < n) {
+				return true;
 			}
+			SpoutLogWarning("isExtensionSupported : extension [%s] not found", extension);
+			return false;
 		}
 		else {
-			SpoutLogWarning("isExtensionSupported : glGetStringi not found");
+			SpoutLogWarning("isExtensionSupported : glGetIntegerv(GL_NUM_EXTENSIONS) did not return a value");
 		}
-	} 
+	}
+	else {
+		SpoutLogWarning("isExtensionSupported : glGetStringi not found");
+	}
+#endif
 
 	SpoutLogNotice("isExtensionSupported : unable to find extension [%s]", extension);
 

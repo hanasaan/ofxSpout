@@ -2,10 +2,9 @@
 
 	spoutDirectX.h
 
-	DirectX functions to manage DirectX 11 texture sharing
+	Functions to manage DirectX 11 texture sharing
 
-
-	Copyright (c) 2014 - 2019, Lynn Jarvis. All rights reserved.
+	Copyright (c) 2014 - 2021, Lynn Jarvis. All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without modification, 
 	are permitted provided that the following conditions are met:
@@ -33,14 +32,8 @@
 #define __spoutDirectX__
 
 #include "SpoutCommon.h"
-#include <windowsx.h>
-#include <d3d9.h>
 #include <d3d11.h>
-#include <string>
-#include <iostream>
-
-#pragma comment (lib, "d3d9.lib")
-#pragma comment (lib, "d3d11.lib")
+#pragma comment (lib, "d3d11.lib")// the Direct3D 11 Library file
 #pragma comment (lib, "DXGI.lib") // for CreateDXGIFactory1
 
 using namespace spoututils;
@@ -52,35 +45,63 @@ class SPOUT_DLLEXP spoutDirectX {
 		spoutDirectX();
 		~spoutDirectX();
 
-		// DX9
-		IDirect3D9Ex* CreateDX9object(); // Create a DirectX9 object
-		IDirect3DDevice9Ex* CreateDX9device(IDirect3D9Ex* pD3D, HWND hWnd);	// Create a DirectX9 device
-		bool CreateSharedDX9Texture(IDirect3DDevice9Ex* pDevice, unsigned int width, unsigned int height, D3DFORMAT format, LPDIRECT3DTEXTURE9 &dxTexture, HANDLE &dxShareHandle);
-		bool WriteDX9surface(IDirect3DDevice9Ex* pDevice, LPDIRECT3DTEXTURE9 dxTexture, LPDIRECT3DSURFACE9 source_surface);
-
-		// DX11
-		ID3D11Device* CreateDX11device(); // Create a DX11 device
-		bool CreateSharedDX11Texture(ID3D11Device* pDevice, unsigned int width, unsigned int height, DXGI_FORMAT format, ID3D11Texture2D** pSharedTexture, HANDLE &dxShareHandle);
+		// Initialize and prepare DirectX 11
+		bool OpenDirectX11();
+		// Release DirectX 11 device and context
+		void CloseDirectX11();
+		// Create a DirectX11 device
+		ID3D11Device* CreateDX11device();
+		// Create a DirectX11 shared texture
+		bool CreateSharedDX11Texture(ID3D11Device* pDevice, unsigned int width, unsigned int height, DXGI_FORMAT format, ID3D11Texture2D** ppSharedTexture, HANDLE &dxShareHandle);
+		// Create a DirectX11 staging texture
+		bool CreateDX11StagingTexture(ID3D11Device* pDevice, unsigned int width, unsigned int height, DXGI_FORMAT format, ID3D11Texture2D** pStagingTexture);
+		// Return the pointer of a DirectX11 shared texture
 		bool OpenDX11shareHandle(ID3D11Device* pDevice, ID3D11Texture2D** ppSharedTexture, HANDLE dxShareHandle);
 
-		// Output adapter selection
-		int GetNumAdapters(); // Get the number of graphics adapters in the system
-		bool GetAdapterName(int index, char *adaptername, int maxchars); // Get an adapter name
-		bool SetAdapter(int index); // Set required graphics adapter for output
-		int GetAdapter(); // Get the current adapter index
-		bool GetAdapterInfo(char *renderdescription, char *displaydescription, int maxchars);
-		bool FindNVIDIA(int &nAdapter); // Find the index of the NVIDIA adapter in a multi-adapter system
+		//
+		// Output graphics adapter
+		//
 
+		// Get the number of graphics adapters in the system
+		int GetNumAdapters();
+		// Get an adapter name
+		bool GetAdapterName(int index, char *adaptername, int maxchars);
+		// Get the current adapter index
+		int GetAdapter();
+		// Set graphics adapter for CreateDX11device from an index
+		bool SetAdapter(int index); 
+		// Get the current adapter description
+		bool GetAdapterInfo(char *renderdescription, char *displaydescription, int maxchars);
+		// Get adapter pointer for a given adapter (-1 means current)
+		IDXGIAdapter* GetAdapterPointer(int index = -1);
+		// Set required graphics adapter for CreateDX11device
+		void SetAdapterPointer(IDXGIAdapter* pAdapter);
+		// Find the index of the NVIDIA adapter in a multi-adapter system
+		bool FindNVIDIA(int &nAdapter);
+
+		//
+		// DirectX11 utiities
+		//
+
+		// Release a texture resource
 		unsigned long ReleaseDX11Texture(ID3D11Device* pd3dDevice, ID3D11Texture2D* pTexture);
+		// Release a device
 		unsigned long ReleaseDX11Device(ID3D11Device* pd3dDevice);
-		ID3D11DeviceContext* GetImmediateContext();
+		// Return the class device
+		ID3D11Device* GetDX11Device();
+		// Return the class immediate context
+		ID3D11DeviceContext* GetDX11Context();
+		// Flush immediate context command queue and wait for copleteion
 		void FlushWait(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pImmediateContext);
+		// Wait for completion after flush
+		void Wait(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pImmediateContext);
 
 	protected:
 
-		IDXGIAdapter* GetAdapterPointer(int index); // Get adapter pointer for DirectX 11
-		int						m_AdapterIndex; // Used for DX9
-		IDXGIAdapter*			m_pAdapterDX11;
+		void DebugLog(ID3D11Device* pd3dDevice, const char* format, ...);
+		int						m_AdapterIndex; // Adapter index
+		IDXGIAdapter*			m_pAdapterDX11; // Adapter pointer
+		ID3D11Device*           m_pd3dDevice;   // DX11 device
 		ID3D11DeviceContext*	m_pImmediateContext;
 		D3D_DRIVER_TYPE			m_driverType;
 		D3D_FEATURE_LEVEL		m_featureLevel;

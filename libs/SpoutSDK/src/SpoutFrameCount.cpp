@@ -21,11 +21,23 @@
 //		24.04.19	- Add HoldFps
 //		19.05.19	- Clean up
 //		05.06.19	- HoldFps - use std::chrono if VS2015 or greater
+//		03.03.20	- Introduce DX11 keyed mutex locks in addition to named mutex
+//		11.03.20	- General cleanup
+//					  Result switch for WaitForSingleObject
+//		05.05.20	- Mutex access timing tests documented within functions
+//		18.06.20	- Update comments
+//		06.09.20	- Add more notice logs to EnableFrameCount
+//		23.09.20	- Initialize m_lastFrame, m_FrameStart, m_bIsNewFrame
+//		24.09.20	- Remove m_FrameStartPtr and m_FrameEndPtr null checks in destructor
+//		14.12.10	- independent std::chrono timing for sender frame count and HoldFps
+//					  Testing and code optimization
+//		18.12.20	- Add SetFrameCount for registry setting
+//		04.02.21	- Reset timers in EnableFrameCount
 //
 // ====================================================================================
 //
 /*
-	Copyright (c) 2019. Lynn Jarvis. All rights reserved.
+	Copyright (c) 2019-2021. Lynn Jarvis. All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without modification, 
 	are permitted provided that the following conditions are met:
@@ -39,7 +51,7 @@
 
 	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"	AND ANY 
 	EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES 
-	OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE	ARE DISCLAIMED. 
+	OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE	ARE DICLAIMED. 
 	IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
 	INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, 
 	PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
@@ -48,9 +60,15 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-//
-
 #include "SpoutFrameCount.h"
+
+//
+// Class: spoutFrameCount
+//
+// Semaphore frame counter.
+//
+// Refer to source code for documentation.
+//
 
 // -----------------------------------------------
 spoutFrameCount::spoutFrameCount()
@@ -64,27 +82,32 @@ spoutFrameCount::spoutFrameCount()
 	m_FrameTimeTotal = 0.0;
 	m_FrameTimeNumber = 0.0;
 	m_lastFrame = 0.0;
+	m_FrameStart = 0.0;
+	m_bIsNewFrame = false;
+	m_SenderFps = GetRefreshRate(); // Default sender fps is system refresh rate
 
-	// Default sender fps is system refresh rate
-	m_Fps = GetRefreshRate();
-
-	// User registry setting is checked in EnableFrameCount
+	// Check the registry setting for frame counting between sender and receiver
 	m_bFrameCount = false; // default not set
-	m_bDisabled = false;
+	DWORD dwFrame = 0;
+	if (ReadDwordFromRegistry(HKEY_CURRENT_USER, "Software\\Leading Edge\\Spout", "Framecount", &dwFrame)) {
+		m_bFrameCount = (dwFrame == 1);
+	}
+	m_bDisabled = false; // frame counting not application disabled
 
 	// Initialize fps control
 	m_millisForFrame = 0.0;
-#if _MSC_VER >= 1900
+
+#ifdef USE_CHRONO
+	// Start std::chrono microsec counting
 	m_FrameStartPtr = new std::chrono::steady_clock::time_point;
 	m_FrameEndPtr = new std::chrono::steady_clock::time_point;
+	m_FramePtr = new std::chrono::steady_clock::time_point;
 #else
-	m_FrameStart = 0.0;
-#endif
-
-	// Initialize counter
+	// Initialize PC msec frequency counter
 	PCFreq = 0.0;
 	CounterStart = 0;
 	StartCounter();
+#endif
 
 }
 
@@ -92,9 +115,10 @@ spoutFrameCount::spoutFrameCount()
 spoutFrameCount::~spoutFrameCount()
 {
 
-#if _MSC_VER >= 1900
-	if (m_FrameStartPtr) delete m_FrameStartPtr;
-	if (m_FrameEndPtr) delete m_FrameEndPtr;
+#ifdef USE_CHRONO
+	delete m_FrameStartPtr;
+	delete m_FrameEndPtr;
+	delete m_FramePtr;
 #endif
 
 	// Close the frame count semaphore.
@@ -112,6 +136,31 @@ spoutFrameCount::~spoutFrameCount()
 //								Public
 // ======================================================================
 
+// Enable or disable frame counting globally by registry setting
+void spoutFrameCount::SetFrameCount(bool bEnable)
+{
+	if (bEnable) {
+		// Frame counting not already set to registry
+		if (!m_bFrameCount) {
+			WriteDwordToRegistry(HKEY_CURRENT_USER, "Software\\Leading Edge\\Spout", "Framecount", 1);
+			m_bFrameCount = true;
+			m_bDisabled = false; // Application disable flag
+		}
+		// Do nothing if already set
+	}
+	else {
+		// Frame counting already set to registry
+		if (m_bFrameCount) {
+			// Clean up existing objects
+			if (IsFrameCountEnabled())
+				CleanupFrameCount();
+		}
+		WriteDwordToRegistry(HKEY_CURRENT_USER, "Software\\Leading Edge\\Spout", "Framecount", 0);
+		m_bFrameCount = false;
+		m_bDisabled = false;
+	}
+}
+
 // -----------------------------------------------
 //
 // Create a frame counting semaphore.
@@ -121,22 +170,18 @@ spoutFrameCount::~spoutFrameCount()
 //
 void spoutFrameCount::EnableFrameCount(const char* SenderName)
 {
-	// Check the user setting for frame counting between sender and receiver
-	DWORD dwFrame = 0;
-	if (ReadDwordFromRegistry(HKEY_CURRENT_USER, "Software\\Leading Edge\\Spout", "Framecount", &dwFrame)) {
-		m_bFrameCount = (dwFrame == 1);
+	// Return if frame counting not recorded in the registry
+	// Subsequently SetNewFrame and GetNewFrame return without action
+	if (!m_bFrameCount) {
+		SpoutLogNotice("SpoutFrameCount::EnableFrameCount : setting not enabled");
+		return;
 	}
 
-	// Return if the user has not selected frame counting
-	// Subsequently SetNewFrame and GetNewFrame return without action
-
-	// Return silently if not enabled in SpoutSettings
-	if (!m_bFrameCount)
+	// Return if application disabled
+	if (m_bDisabled) {
+		SpoutLogNotice("SpoutFrameCount::EnableFrameCount : application disabled");
 		return;
-
-	// Return silently if application disabled
-	if (m_bDisabled)
-		return;
+	}
 
 	// A sender name is required
 	if (SenderName[0] == 0) {
@@ -149,7 +194,21 @@ void spoutFrameCount::EnableFrameCount(const char* SenderName)
 	m_LastFrameCount = 0L;
 	m_FrameTimeTotal = 0.0;
 	m_FrameTimeNumber = 0.0;
-	m_Fps = GetRefreshRate();
+	m_SenderFps = GetRefreshRate();
+
+	// Reset timers
+	m_millisForFrame = 0.0;
+#ifdef USE_CHRONO
+	// Start std::chrono microsec counting
+	m_FrameStartPtr = new std::chrono::steady_clock::time_point;
+	m_FrameEndPtr = new std::chrono::steady_clock::time_point;
+	m_FramePtr = new std::chrono::steady_clock::time_point;
+#else
+	// Initialize PC msec frequency counter
+	PCFreq = 0.0;
+	CounterStart = 0;
+	StartCounter();
+#endif
 
 	// Return if already enabled for this sender
 	if (m_hCountSemaphore && strcmp(SenderName, m_SenderName) == 0) {
@@ -193,7 +252,7 @@ void spoutFrameCount::EnableFrameCount(const char* SenderName)
 
 	m_hCountSemaphore = hSemaphore;
 
-	SpoutLogNotice("    Semaphore handle [%d]", m_hCountSemaphore);
+	SpoutLogNotice("    Semaphore handle [0x%.7X]", LOWORD(m_hCountSemaphore) );
 
 }
 
@@ -237,26 +296,29 @@ void spoutFrameCount::SetNewFrame()
 	// but must be called before ReleaseSemaphore can be called
 	// or there is an error.
 	DWORD dwWaitResult = WaitForSingleObject(m_hCountSemaphore, 0);
-	if (dwWaitResult != WAIT_OBJECT_0) {
-		if (dwWaitResult == WAIT_ABANDONED)
-			SpoutLogWarning("SpoutFrameCount::SetNewFrame - WAIT_ABANDONED");
-		if (dwWaitResult == WAIT_FAILED)
-			SpoutLogWarning("SpoutFrameCount::SetNewFrame - WAIT_FAILED");
+	switch (dwWaitResult) {
+		case WAIT_OBJECT_0:
+			// Release the frame counting semaphore to increase it's count.
+			// so that the receiver can retrieve the new count.
+			// Increment by 2 because WaitForSingleObject decremented it.
+			if (ReleaseSemaphore(m_hCountSemaphore, 2, NULL) == false) {
+				SpoutLogError("spoutFrameCount::SetNewFrame - ReleaseSemaphore failed");
+			}
+			else {
+				m_FrameCount++; // Increment the sender frame count
+				// Update the sender fps calculations for the new frame
+				UpdateSenderFps(1);
+			}
+			return;
+		case WAIT_ABANDONED:
+			SpoutLogError("SpoutFrameCount::SetNewFrame - WAIT_ABANDONED");
+			break;
+		case WAIT_FAILED:
+			SpoutLogError("SpoutFrameCount::SetNewFrame - WAIT_FAILED");
+			break;
+		default:
+			break;
 	}
-	else {
-		// Release the frame counting semaphore to increase it's count.
-		// so that the receiver can retrieve the new count.
-		// Increment by 2 because WaitForSingleObject decremented it.
-		if (ReleaseSemaphore(m_hCountSemaphore, 2, NULL) == FALSE) {
-			SpoutLogError("spoutFrameCount::SetNewFrame - ReleaseSemaphore failed");
-		}
-		else {
-			m_FrameCount++; // Increment the sender frame count
-			// Update the sender fps calculations for the new frame
-			UpdateSenderFps(1);
-		}
-	}
-
 }
 
 // -----------------------------------------------
@@ -281,33 +343,39 @@ bool spoutFrameCount::GetNewFrame()
 
 	// A receiver creates of opens a named semaphore when it connects to a sender
 	// Do not block if semaphore creation failed so that ReceiveTexture can still be called
-	if (!m_hCountSemaphore)
+	if (!m_hCountSemaphore) {
+		printf("No count sempaphore\n");
 		return true;
+	}
 
 	// Access the frame count semaphore
 	DWORD dwWaitResult = WaitForSingleObject(m_hCountSemaphore, 0);
-	if (dwWaitResult != WAIT_OBJECT_0) {
-		if (dwWaitResult == WAIT_ABANDONED)
+	switch (dwWaitResult) {
+		case WAIT_OBJECT_0:
+			// Call ReleaseSemaphore with a release count of 1 to return it
+			// to what it was before the wait and record the previous count.
+			// The next time round it will either be the same count because
+			// the receiver released it, or increased because the sender
+			// released and incremented it.
+			if (ReleaseSemaphore(m_hCountSemaphore, 1, &framecount) == false) {
+				SpoutLogError("spoutFrameCount::GetNewFrame - ReleaseSemaphore failed");
+				return true; // do not block
+			}
+			break;
+		case WAIT_ABANDONED :
 			SpoutLogWarning("SpoutFrameCount::GetNewFrame - WAIT_ABANDONED");
-		if (dwWaitResult == WAIT_FAILED)
+			break;
+		case WAIT_FAILED :
 			SpoutLogWarning("SpoutFrameCount::GetNewFrame - WAIT_FAILED");
-	}
-	else {
-		// Call ReleaseSemaphore with a release count of 1 to return it
-		// to what it was before the wait and record the previous count.
-		// The next time round it will either be the same count because
-		// the receiver released it, or increased because the sender
-		// released and incremented it.
-		if (ReleaseSemaphore(m_hCountSemaphore, 1, &framecount) == FALSE) {
-			SpoutLogError("spoutFrameCount::GetNewFrame - ReleaseSemaphore failed");
-			return true; // do not block
-		}
+			break;
+		default :
+			break;
 	}
 
 	// Update the global frame count
 	m_FrameCount = framecount;
 
-	// Count will still be zero for older apps that do not set a frame count
+	// Count will still be zero for apps that do not set a frame count
 	if (framecount == 0)
 		return true;
 
@@ -337,13 +405,6 @@ bool spoutFrameCount::GetNewFrame()
 // -----------------------------------------------
 void spoutFrameCount::CleanupFrameCount()
 {
-	// Return if not enabled in SpoutSettings
-	if (!m_bFrameCount)
-		return;
-
-	// Return if application disabled
-	if (m_bDisabled)
-		return;
 
 	// Return if no count semaphore
 	// i.e. no sender started or cleanup already done
@@ -363,7 +424,7 @@ void spoutFrameCount::CleanupFrameCount()
 	// Reset counters
 	m_FrameCount = 0L;
 	m_LastFrameCount = 0L;
-	m_Fps = GetRefreshRate();
+	m_SenderFps = GetRefreshRate();
 	m_FrameTimeTotal = 0.0;
 	m_FrameTimeNumber = 0.0;
 
@@ -374,7 +435,7 @@ void spoutFrameCount::CleanupFrameCount()
 //  Is the received frame new ?
 //
 //  This function can be used by a receiver after ReceiveTexture
-//	to determine whether the frame is new.
+//	to determine whether the frame just received is new.
 //
 //	Used by an application to avoid time consuming processing
 //	after receiving a texture.
@@ -390,7 +451,7 @@ bool spoutFrameCount::IsFrameNew()
 // -----------------------------------------------
 double spoutFrameCount::GetSenderFps()
 {
-	return m_Fps;
+	return m_SenderFps;
 }
 
 // -----------------------------------------------
@@ -417,9 +478,9 @@ void spoutFrameCount::HoldFps(int fps)
 
 	double framerate = static_cast<double>(fps);
 
-#if _MSC_VER >= 1900
+#ifdef USE_CHRONO
 	// Initialize frame time at target rate
-	if (m_millisForFrame == 0.0) {
+	if (m_millisForFrame < 0.01) {
 		m_millisForFrame = 1000.0 / framerate; // msec per frame
 		*m_FrameStartPtr = std::chrono::steady_clock::now();
 		SpoutLogNotice("spoutFrameCount::HoldFps(%d)", fps);
@@ -457,28 +518,65 @@ void spoutFrameCount::HoldFps(int fps)
 //                     Texture access mutex
 // =================================================================
 
+//
+// Check access to the shared texture
+//
+// Use a keyed mutex if the DX11 texture supports it
+// otherwise use the sender named mutex.
+// The DX11 texture pointer argument should always be null for DX9 mode.
+bool spoutFrameCount::CheckTextureAccess(ID3D11Texture2D* D3D11texture)
+{
+	if (IsKeyedMutex(D3D11texture)) {
+		return CheckKeyedAccess(D3D11texture);
+	}
+	else {
+		return CheckAccess();
+	}
+}
+
+void spoutFrameCount::AllowTextureAccess(ID3D11Texture2D* D3D11texture)
+{
+	if (IsKeyedMutex(D3D11texture))
+		AllowKeyedAccess(D3D11texture);
+	else
+		AllowAccess();
+}
+
 // -----------------------------------------------
 bool spoutFrameCount::CreateAccessMutex(const char *SenderName)
 {
 	DWORD errnum = 0;
-	char szMutexName[300];
+	char szMutexName[512];
 	HANDLE hMutex = NULL;
 
 	// Create the mutex name to control access to the shared texture
-	sprintf_s((char*)szMutexName, 300, "%s_SpoutAccessMutex", SenderName);
+	sprintf_s((char*)szMutexName, 512, "%s_SpoutAccessMutex", SenderName);
 
 	// Create or open mutex depending, on whether it already exists or not
-	hMutex = CreateMutexA(NULL, FALSE, (LPCSTR)szMutexName);
+	//  - A sender will create one.
+	//  - A receiver will open for a specific sender.
+	//    A receiver should not open a mutex until a sender is found to connect to.
+	//    If that sender does not have a mutex, one will be created
+	//    and will always be available to the receiver.
+	//
+	hMutex = CreateMutexA(NULL, false, (LPCSTR)szMutexName);
 
 	if (hMutex == NULL) {
-		spoututils::SpoutLogError("spoutFrameCount::CreateAccessMutex - access mutex NULL invalid handle");
+		SpoutLogError("spoutFrameCount::CreateAccessMutex - NULL invalid handle");
 		return false;
 	}
 	else {
 		errnum = GetLastError();
 		if (errnum == ERROR_INVALID_HANDLE) {
-			spoututils::SpoutLogError("spoutFrameCount::CreateAccessMutex - access mutex [%s] invalid handle", szMutexName);
+			SpoutLogError("spoutFrameCount::CreateAccessMutex - [%s] invalid handle", szMutexName);
 			return false;
+		}
+		// Here we can find if the mutex already exists
+		else if (errnum == ERROR_ALREADY_EXISTS) {
+			SpoutLogNotice("spoutFrameCount::CreateAccessMutex - [%s] already exists", szMutexName);
+		}
+		else {
+			SpoutLogNotice("spoutFrameCount::CreateAccessMutex - [%s] created - 0x%.7X", szMutexName, PtrToUint(hMutex) );
 		}
 	}
 
@@ -498,58 +596,57 @@ void spoutFrameCount::CloseAccessMutex()
 }
 
 // -----------------------------------------------
-//
 // Check whether any other process is holding the lock
-// and wait for access for 4 frames if so.
+// and wait for access for up to 4 frames if so.
 // For receiving from Version 1 apps with no mutex lock,
 // a reader will have created the mutex and will have
-// sole access and rely on the interop locks
-//
+// sole access and rely on the interop locks.
 bool spoutFrameCount::CheckAccess()
 {
-	DWORD dwWaitResult = WAIT_FAILED;
-
 	// Don't block if no mutex for Spout1 apps
-	// or if called when the sender has closed
-	// AllowAccess also tests for a null handle
-	if (!m_hAccessMutex) {
-		// SpoutLogWarning("CheckAccess - no Mutex");
+	// or if called when the sender has closed.
+	// AllowAccess also tests for a null handle.
+	if (!m_hAccessMutex)
 		return true;
-	}
 
-	dwWaitResult = WaitForSingleObject(m_hAccessMutex, 67); // 4 frames at 60fps
-	if (dwWaitResult == WAIT_OBJECT_0) {
-		// The state of the object is signalled.
-		return true;
-	}
-	else {
-		switch (dwWaitResult) {
-			case WAIT_ABANDONED: // Could return here
-				SpoutLogError("CheckAccess - WAIT_ABANDONED");
-				break;
-			case WAIT_TIMEOUT: // The time-out interval elapsed, and the object's state is nonsignaled.
-				// This can happen the first time a receiver connects to a sender
-				// SpoutLogError("CheckAccess - WAIT_TIMEOUT");
-				break;
-			case WAIT_FAILED: // Could use call GetLastError
-				SpoutLogError("CheckAccess - WAIT_FAILED");
-				break;
-			default:
-					SpoutLogError("CheckAccess - unknown error");
+	// Typically 2-3 microseconds.
+	// 10 receivers - no increase.
+	// Note that NVIDIA "Threaded optimization" can cause delay
+	// for WaitForSingleObject and is set OFF by SpoutSettinngs
+
+	DWORD dwWaitResult = WaitForSingleObject(m_hAccessMutex, 67); // timeout 4 frames at 60fps
+	switch (dwWaitResult) {
+		case WAIT_OBJECT_0 :
+			// The state of the object is signalled.
+			return true;
+		case WAIT_ABANDONED:
+			SpoutLogError("spoutFrameCount::CheckAccess - WAIT_ABANDONED");
 			break;
-		}
+		case WAIT_TIMEOUT: // The time-out interval elapsed, and the object's state is nonsignaled.
+			// This can happen the first time a receiver connects to a sender
+			// SpoutLogError("CheckAccess - WAIT_TIMEOUT");
+			break;
+		case WAIT_FAILED: // Could use call GetLastError
+			SpoutLogError("spoutFrameCount::CheckAccess - WAIT_FAILED");
+			break;
+		default:
+			SpoutLogError("spoutFrameCount::CheckAccess - unknown error");
+			break;
 	}
 	return false;
 }
 
 // -----------------------------------------------
+// Release named mutex
 void spoutFrameCount::AllowAccess()
 {
+	// < 1 microsecond
 	// Release ownership of the mutex object.
 	// The caller must call ReleaseMutex once for each time that the mutex satisfied a wait.
 	// The ReleaseMutex function fails if the caller does not own the mutex object
-	if (m_hAccessMutex) 
+	if (m_hAccessMutex)
 		ReleaseMutex(m_hAccessMutex);
+
 }
 
 
@@ -558,46 +655,119 @@ void spoutFrameCount::AllowAccess()
 // ===============================================================================
 
 
-// -----------------------------------------------
+// Keyed mutex check
 //
+// Microsoft docs :
+// When a surface is created using the D3D10_RESOURCE_MISC_SHARED_KEYEDMUTEX 
+// value of the D3D10_RESOURCE_MISC_FLAG enumeration, you must call the 
+// AcquireSync method before rendering to the surface. You must call the 
+// ReleaseSync method when you are done rendering to a surface.
+//
+// Tests show that if a DX11 texture has been created with a keyed mutex it must
+// be used in place of the sender named mutex or CopyResource fails
+//
+bool spoutFrameCount::CheckKeyedAccess(ID3D11Texture2D* pTexture)
+{
+	// 85-90 microseconds
+	if (pTexture) {
+
+		IDXGIKeyedMutex* pDXGIKeyedMutex = nullptr;
+
+		// Check the keyed mutex
+		pTexture->QueryInterface(_uuidof(IDXGIKeyedMutex), (void**)&pDXGIKeyedMutex);
+		if (pDXGIKeyedMutex) {
+			HRESULT hr = pDXGIKeyedMutex->AcquireSync(0, 67); // TODO - link with SPOUT_WAIT_TIMEOUT
+			switch (hr) {
+				case WAIT_OBJECT_0:
+					// The state of the object is signalled.
+					pDXGIKeyedMutex->Release();
+					return true;
+				case WAIT_ABANDONED:
+					SpoutLogError("spoutDirectX::CheckKeyedAccess : WAIT_ABANDONED");
+					break;
+				case WAIT_TIMEOUT: // The time-out interval elapsed, and the object's state is nonsignaled.
+					SpoutLogError("spoutDirectX::CheckKeyedAccess : WAIT_TIMEOUT");
+					break;
+				default:
+					break;
+			}
+			pDXGIKeyedMutex->ReleaseSync(0);
+			pDXGIKeyedMutex->Release();
+		}
+	}
+	return false;
+}
+
+// Release keyed mutex
+void spoutFrameCount::AllowKeyedAccess(ID3D11Texture2D* pTexture)
+{
+	// 22-24 microseconds
+	if (pTexture) {
+		IDXGIKeyedMutex* pDXGIKeyedMutex;
+		pTexture->QueryInterface(_uuidof(IDXGIKeyedMutex), (void**)&pDXGIKeyedMutex);
+		if (pDXGIKeyedMutex) {
+			pDXGIKeyedMutex->ReleaseSync(0);
+			pDXGIKeyedMutex->Release();
+		}
+	}
+}
+
+bool spoutFrameCount::IsKeyedMutex(ID3D11Texture2D* D3D11texture)
+{
+	// Approximately 1.5 microseconds
+	if (D3D11texture) {
+		D3D11_TEXTURE2D_DESC desc;
+		D3D11texture->GetDesc(&desc);
+		if (desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX) {
+			// printf("IsKeyed()\n");
+			return true;
+		}
+	}
+	// Return to access by another method if no keyed mutex
+	return false;
+}
+
+
+// -----------------------------------------------
 // Calculate the sender frames per second
 // Applications before 2.007 have a frame rate dependent on the system fps
-//
 void spoutFrameCount::UpdateSenderFps(long framecount) {
+
+	// 0.0005 msec per frame
 
 	// If framecount is zero, the sender has not produced a new frame yet
 	if (framecount > 0) {
 
+#ifdef USE_CHRONO
+		*m_FrameEndPtr = std::chrono::steady_clock::now();
+		// milliseconds elapsed
+		double frametime = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(*m_FrameEndPtr - *m_FramePtr).count() / 1000.);
+		// Reset the frame time
+		*m_FramePtr = std::chrono::steady_clock::now();
+#else
 		// Msecs between this frame and the last
 		double thisFrame = GetCounter();
-		double frametime = thisFrame - m_lastFrame;
-
+		double frametime = thisFrame-m_lastFrame;
 		// Set the start time for the next frame
 		m_lastFrame = thisFrame;
-
-		// Msecs per frame if more than one frame has been produced by the sender
-		if (framecount > 1L)
-			frametime = frametime / static_cast<double>(framecount);
-
-		// Average the last 16 frames to minimise variability for damping
-		if (m_FrameTimeNumber < 16) {
-			m_FrameTimeTotal = m_FrameTimeTotal + frametime;
-			m_FrameTimeNumber += 1.0;
-		}
-		else {
-			// Calculate the average frame time
+#endif
+		// Accumulate totals
+		m_FrameTimeTotal = m_FrameTimeTotal + frametime;
+		m_FrameTimeNumber += (double)framecount; // Could have been more than one frame
+		if (m_FrameTimeNumber > 16) {
+			// Calculate the average frame time every 16 frames
 			frametime = m_FrameTimeTotal / m_FrameTimeNumber;
 			m_FrameTimeTotal = 0.0;
 			m_FrameTimeNumber = 0.0;
-			// Calculate frames per second
-			// Default fps is system refresh rate
+			// Calculate frames per second (default fps is system refresh rate)
 			frametime = frametime / 1000.0; // frame time in seconds
 			if (frametime > 0.0001) {
 				double fps = (1.0 / frametime); // Fps
-				m_Fps = 0.75*m_Fps + 0.25*fps; // damping
+				m_SenderFps = 0.85*m_SenderFps + 0.15*fps; // damping
 			}
 		}
 	}
+
 }
 
 // -----------------------------------------------
@@ -609,7 +779,7 @@ double spoutFrameCount::GetRefreshRate()
 {
 	double frequency = 60.0;
 	DEVMODE DevMode;
-	BOOL bResult = TRUE;
+	BOOL bResult = true;
 	DWORD dwCurrentSettings = 0;
 	DevMode.dmSize = sizeof(DEVMODE);
 	// Test all the graphics modes
@@ -629,14 +799,14 @@ double spoutFrameCount::GetRefreshRate()
 // Information on using QueryPerformanceFrequency for timing
 // https://docs.microsoft.com/en-us/windows/desktop/SysInfo/acquiring-high-resolution-time-stamps
 //
-// Used in favour of std::chrono for compatibility with Visual Studio before VS2015
+// Used instead of std::chrono for Visual Studio before VS2015
 //
 void spoutFrameCount::StartCounter()
 {
 	LARGE_INTEGER li;
 	if (QueryPerformanceFrequency(&li)) {
 		// Find the PC frequency if not done yet
-		if(PCFreq == 0.0)
+		if(PCFreq < 0.0001)
 			PCFreq = static_cast<double>(li.QuadPart) / 1000.0;
 		// Get the counter start
 		QueryPerformanceCounter(&li);

@@ -55,18 +55,22 @@
 	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
 		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
 		<Import Project="..\..\..\libs\openFrameworksCompiled\project\vs\openFrameworksRelease.props" />
+		<Import Project="../../../addons\ofxSpout\ofxSpoutLib\ofxSpout.props" />
 	</ImportGroup>
 	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
 		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
 		<Import Project="..\..\..\libs\openFrameworksCompiled\project\vs\openFrameworksRelease.props" />
+		<Import Project="../../../addons\ofxSpout\ofxSpoutLib\ofxSpout.props" />
 	</ImportGroup>
 	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
 		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
 		<Import Project="..\..\..\libs\openFrameworksCompiled\project\vs\openFrameworksDebug.props" />
+		<Import Project="../../../addons\ofxSpout\ofxSpoutLib\ofxSpout.props" />
 	</ImportGroup>
 	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
 		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
 		<Import Project="..\..\..\libs\openFrameworksCompiled\project\vs\openFrameworksDebug.props" />
+		<Import Project="../../../addons\ofxSpout\ofxSpoutLib\ofxSpout.props" />
 	</ImportGroup>
 	<PropertyGroup Label="UserMacros" />
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -185,14 +189,13 @@
 		<ClCompile Include="..\..\..\addons\ofxSpout\src\ofxSpout\Receiver.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\src\ofxSpout\Sender.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\src\ofxSpout\Utils.cpp" />
+		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\Spout.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutCopy.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutDirectX.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutFrameCount.cpp" />
-		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLDXinterop.cpp" />
+		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGL.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLextensions.cpp" />
-		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutMemoryShare.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutReceiver.cpp" />
-		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSDK.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSender.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSenderNames.cpp" />
 		<ClCompile Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSharedMemory.cpp" />
@@ -209,11 +212,9 @@
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutCopy.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutDirectX.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutFrameCount.h" />
-		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLDXinterop.h" />
+		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGL.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutGLextensions.h" />
-		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutMemoryShare.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutReceiver.h" />
-		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSDK.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSender.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSenderNames.h" />
 		<ClInclude Include="..\..\..\addons\ofxSpout\libs\SpoutSDK\src\SpoutSharedMemory.h" />

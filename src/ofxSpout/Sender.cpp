@@ -29,9 +29,10 @@ namespace ofxSpout {
 			this->spoutSender = new SpoutSender();
 
 			this->glFormat = glFormat;
+			this->channelName = channelName;
 
 			//create the sender, and allow for Spout to change our channel name
-			if (!this->spoutSender->SetupSender(channelName.c_str(), initialWidth, initialHeight, toDXFormat(this->glFormat))) {
+			if (!this->spoutSender->CreateSender(channelName.c_str(), initialWidth, initialHeight, toDXFormat(this->glFormat))) {
 				throw("Can't create sender");
 			}
 			return true;
@@ -74,13 +75,14 @@ namespace ofxSpout {
 			//check if the sender matches the settings of the texture
 			if (this->spoutSender->GetWidth() != texture.getWidth() || this->spoutSender->GetHeight() != texture.getHeight()) {
 				//update the sender to match local settings
-				this->spoutSender->Update(texture.getWidth(), texture.getHeight());
+				this->spoutSender->UpdateSender(channelName.c_str(), texture.getWidth(), texture.getHeight());
 			}
 
 			//send texture and retain any fbo bound for drawing
 			GLint drawFboId = 0;
 			glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFboId);
-			this->spoutSender->SendTextureData(texture.getTextureData().textureID, texture.getTextureData().textureTarget, drawFboId);
+			this->spoutSender->SendTexture(texture.getTextureData().textureID, texture.getTextureData().textureTarget, 
+				texture.getWidth(), texture.getHeight(), false, drawFboId);
 			return true;
 		}
 		catch (const char * e) {

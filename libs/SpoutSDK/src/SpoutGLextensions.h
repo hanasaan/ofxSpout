@@ -23,7 +23,7 @@
 //
 /*
 
-	Copyright (c) 2014-2019, Lynn Jarvis. All rights reserved.
+	Copyright (c) 2014-2021, Lynn Jarvis. All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without modification, 
 	are permitted provided that the following conditions are met:
@@ -48,6 +48,19 @@
 #pragma once
 #ifndef __spoutGLextensions__	// standard way as well
 #define __spoutGLextensions__
+
+//
+// Header: spoutGLextensions
+//
+// Used for load of openGL extensions with options to use Glew
+// or disable dynamic load of specific extension types.
+// If Glew is used, none of the extensions are loaded dynamically.
+// Individual extension types can be disabled if they conflict
+// with extensions already managed by particular applications.
+//
+// Refer to source code for documentation.
+//
+
 
 // ====================== COMPILE OPTIONS ================================
 //
@@ -76,6 +89,7 @@
 
 #include <windows.h>
 #include <stdio.h> // for debug print
+#include "SpoutCommon.h" // for legacyOpenGL define
 #include "SpoutUtils.h"
 
 using namespace spoututils;
@@ -127,7 +141,7 @@ using namespace spoututils;
 #define GLEXT_SUPPORT_SWAP			 16
 #define GLEXT_SUPPORT_BGRA			 32
 #define GLEXT_SUPPORT_COPY			 64
-#define SUPPORT_CONTEXT_EXTENSION   128
+#define GLEXT_SUPPORT_CONTEXT       128
 
 //-----------------------------------------------------
 // GL consts that are needed and aren't present in GL.h
@@ -342,6 +356,8 @@ extern PFNWGLGETSWAPINTERVALEXTPROC    wglGetSwapIntervalEXT;
 #define GL_STREAM_READ					0x88E1
 #define GL_READ_ONLY					0x88B8
 #define GL_WRITE_ONLY					0x88B9
+#define GL_BUFFER_SIZE_EXT				0x8764
+
 
 // PBO functions
 typedef ptrdiff_t GLsizeiptr;
@@ -351,6 +367,7 @@ typedef void   (APIENTRY *glBindBufferPROC) (GLenum target, const GLuint buffer)
 typedef void   (APIENTRY *glBufferDataPROC) (GLenum target,  GLsizeiptr size,  const GLvoid * data,  GLenum usage);
 typedef void * (APIENTRY *glMapBufferPROC) (GLenum target,  GLenum access);
 typedef void   (APIENTRY *glUnmapBufferPROC) (GLenum target);
+typedef void   (APIENTRY *glGetBufferParameterivPROC) (GLenum target, GLenum value,	GLint * data);
 
 extern glGenBuffersPROC		glGenBuffersEXT;
 extern glDeleteBuffersPROC	glDeleteBuffersEXT;
@@ -358,6 +375,8 @@ extern glBindBufferPROC		glBindBufferEXT;
 extern glBufferDataPROC		glBufferDataEXT;
 extern glMapBufferPROC		glMapBufferEXT;
 extern glUnmapBufferPROC	glUnmapBufferEXT;
+extern glGetBufferParameterivPROC	glGetBufferParameterivEXT;
+
 #endif // USE_PBO_EXTENSIONS
 
 //-------------------

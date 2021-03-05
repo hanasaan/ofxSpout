@@ -6,7 +6,7 @@
 
 	- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-	Copyright (c) 2016-2019, Lynn Jarvis. All rights reserved.
+	Copyright (c) 2016-2021, Lynn Jarvis. All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without modification, 
 	are permitted provided that the following conditions are met:
@@ -49,35 +49,93 @@ class SPOUT_DLLEXP spoutCopy {
 		spoutCopy();
 		~spoutCopy();
 
+		// Copy image pixels and select fastest method based on image width
 		void CopyPixels(const unsigned char *src, unsigned char *dst,
 						unsigned int width, unsigned int height, 
 						GLenum glFormat = GL_RGBA, bool bInvert = false) const;
 
+		// Flip a pixel buffer in place
 		void FlipBuffer(const unsigned char *src, unsigned char *dst,
 						unsigned int width, unsigned int height,
 						GLenum glFormat = GL_RGBA) const;
 
+		// SSE2 version of memcpy
 		void memcpy_sse2(void* dst, const void* src, size_t size) const;
 
+		// Copy rgba buffers line by line allowing for source pitch using the fastest method
+		void rgba2rgba(const void* source, void* dest, unsigned int width, unsigned int height,
+			unsigned int sourcePitch, bool bInvert = false) const;
+
+		// Copy rgba buffers line allowing for source and destination line pitch
+		void rgba2rgba(const void* source, void* dest, unsigned int width, unsigned int height,
+			unsigned int sourcePitch, unsigned int destPitch, bool bInvert) const;
+
+		// Copy rgba buffers of differing size
+		void rgba2rgbaResample(const void* source, void* dest,
+			unsigned int sourceWidth, unsigned int sourceHeight, unsigned int sourcePitch,
+			unsigned int destWidth, unsigned int destHeight, bool bInvert = false) const;
+
+		// Copy rgba to bgra
 		void rgba2bgra(const void* rgba_source, void *bgra_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
+		
+		// Copy rgba to bgra line by line allowing for source pitch using the fastest method
+		void rgba2bgra(const void* rgba_source, void *bgra_dest, unsigned int width, unsigned int height,
+			unsigned int sourcePitch, bool bInvert = false) const;
+
+		// Copy rgba to bgra line allowing for source and destination line pitch
+		void rgba2bgra(const void* source, void* dest, unsigned int width, unsigned int height,
+			unsigned int sourcePitch, unsigned int destPitch, bool bInvert) const;
+		
+		// Copy bgra to rgba
 		void bgra2rgba(const void* bgra_source, void *rgba_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
 		
+		// Correct for image stride
 		void RemovePadding(const unsigned char *source, unsigned char *dest,
 			unsigned int width, unsigned int height,
 			unsigned int source_stride, GLenum glFormat) const;
 
-		// TODO avoid redundancy
-		void rgb2rgba (const void* rgb_source, void *rgba_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
-		void bgr2rgba (const void* bgr_source, void *rgba_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
+		// RGBA<>RGB conversion options 
+		// TODO : add RGBA pitch to all functions
+		// TODO : avoid redundancy
+		void rgb2rgba (const void* rgb_source,  void *rgba_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
+		
+		// Copy RGB to RGBA allowing for destination pitch
+		void rgb2rgba(const void *rgb_source, void *rgba_dest,
+			unsigned int width, unsigned int height,
+			unsigned int dest_pitch, bool bInvert) const;
+		
+		void bgr2rgba (const void* bgr_source,  void *rgba_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
+		// BGR to RGBA allowing for destination pitch
+		void bgr2rgba(const void *rgb_source, void *rgba_dest,
+			unsigned int width, unsigned int height,
+			unsigned int dest_pitch, bool bInvert) const;
 
-		void rgb2bgra (const void* rgb_source, void *bgra_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
-		void bgr2bgra (const void* bgr_source, void *bgra_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
+		void rgb2bgra (const void* rgb_source,  void *bgra_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
+		
+		void rgb2bgra(const void *rgb_source, void *bgra_dest,
+			unsigned int width, unsigned int height,
+			unsigned int dest_pitch, bool bInvert) const;
 
-		void rgba2rgb (const void* rgba_source, void *rgb_dest,  unsigned int width, unsigned int height, bool bInvert = false) const;
+		void bgr2bgra (const void* bgr_source,  void *bgra_dest, unsigned int width, unsigned int height, bool bInvert = false) const;
 		void rgba2bgr (const void* rgba_source, void *bgr_dest,  unsigned int width, unsigned int height, bool bInvert = false) const;
-
 		void bgra2rgb (const void* bgra_source, void *rgb_dest,  unsigned int width, unsigned int height, bool bInvert = false) const;
 		void bgra2bgr (const void* bgra_source, void *bgr_dest,  unsigned int width, unsigned int height, bool bInvert = false) const;
+
+		// Copy RGBA to RGB allowing for source line pitch
+		void rgba2rgb (const void* rgba_source, void *rgb_dest,	unsigned int width, unsigned int height,
+			unsigned int sourcePitch, bool bInvert = false, bool bMirror = false, bool bSwapRB = false) const;
+		// Copy RGBA to RGB allowing for source and destination pitch
+		void rgba2rgbResample(const void* source, void* dest,
+			unsigned int sourceWidth, unsigned int sourceHeight, unsigned int sourcePitch,
+			unsigned int destWidth, unsigned int destHeight,
+			bool bInvert = false, bool bMirror = false, bool bSwapRB = false) const;
+		// Copy RGBA to BGR allowing for source line pitch
+		void rgba2bgr(const void* rgba_source, void *rgb_dest, unsigned int width, unsigned int height,
+			unsigned int sourcePitch, bool bInvert = false) const;
+		// Copy RGBA to BGR allowing for source and destination pitch
+		void rgba2bgrResample(const void* source, void* dest,
+			unsigned int sourceWidth, unsigned int sourceHeight, unsigned int sourcePitch,
+			unsigned int destWidth, unsigned int destHeight, bool bInvert = false) const;
 
 	protected :
 
